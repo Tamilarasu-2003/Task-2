@@ -210,6 +210,9 @@ app.get('/products/search', async (req, res) => {
     const { query, page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
 
+    console.log("page",page);
+    console.log("offset",offset)
+
     if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
     }
@@ -237,8 +240,8 @@ app.get('/products/search', async (req, res) => {
         const mustConditions = [
             {
                 multi_match: {
-                    query: query.replace(priceRangeRegex, '').trim(), // Remove price filter from the query
-                    fields: ['name', 'category' ,'specs.brand'], // Search in both name and category
+                    query: query.replace(priceRangeRegex, '').trim(),
+                    fields: ['name', 'category', 'specs.brand'],
                     operator: 'and'
                 }
             }
@@ -249,12 +252,12 @@ app.get('/products/search', async (req, res) => {
             mustConditions.push(priceFilter);
         }
 
-        // Create the search body
+        // Create the search body for the main search
         const searchBody = {
             index: 'products',
             body: {
-                from: offset,
-                size: limit,
+                from: 0,
+                size: 1000,
                 query: {
                     bool: {
                         must: mustConditions
@@ -269,25 +272,56 @@ app.get('/products/search', async (req, res) => {
             ...hit._source,
         }));
 
+        // If no products found, perform search without price filter
+        if (products.length === 0 && priceFilter) {
+            const mustConditionsWithoutPrice = [
+                {
+                    multi_match: {
+                        query: query.replace(priceRangeRegex, '').trim(),
+                        fields: ['name', 'category', 'specs.brand'],
+                        operator: 'and'
+                    }
+                }
+            ];
+
+            const fallbackSearchBody = {
+                index: 'products',
+                body: {
+                    from: 0,
+                    size: 1000,
+                    query: {
+                        bool: {
+                            must: mustConditionsWithoutPrice
+                        }
+                    }
+                },
+            };
+
+            const fallbackSearchResults = await elasticClient.search(fallbackSearchBody);
+            products.push(...fallbackSearchResults.hits.hits.map(hit => ({
+                id: hit._id,
+                ...hit._source,
+            })));
+        }
+
         // Determine the category from the results
         const category = products.length > 0 ? products[0].category : null;
         let additionalProducts = [];
 
         if (category) {
-            // Search for products in the same category
             const categorySearchBody = {
                 index: 'products',
                 body: {
                     from: 0,
-                    size: limit,
+                    size: 1000,
                     query: {
                         bool: {
                             must: [
                                 { term: { category: category } },
-                                ...(priceFilter ? [priceFilter] : []) // Apply the same price filter if it exists
+                                ...(priceFilter ? [priceFilter] : [])
                             ],
                             must_not: [
-                                { match: { name: query.replace(priceRangeRegex, '').trim() } } // Exclude exact name matches
+                                { match: { name: query.replace(priceRangeRegex, '').trim() } }
                             ]
                         }
                     }
@@ -306,9 +340,13 @@ app.get('/products/search', async (req, res) => {
         const uniqueProducts = Array.from(new Set(combinedProducts.map(p => p.id)))
             .map(id => combinedProducts.find(p => p.id === id));
 
+        // Implement pagination on the combined results
+        const paginatedProducts = uniqueProducts.slice(offset, page*limit);
+        const totalCount = uniqueProducts.length;
+
         res.json({
-            products: uniqueProducts,
-            totalCount: uniqueProducts.length,
+            products: paginatedProducts,
+            totalCount,
         });
 
     } catch (error) {
@@ -316,6 +354,8 @@ app.get('/products/search', async (req, res) => {
         res.status(500).send('Server error');
     }
 });
+
+
 
 
 
