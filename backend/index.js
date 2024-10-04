@@ -321,15 +321,12 @@ app.get('/products/search', async (req, res) => {
         let similarProducts = [];
 
         if (category) {
-            // Collect IDs of exact products to exclude them from similar products
             const exactProductIds = exactProducts.map(product => product.id);
-
-            // Find similar products in the same category, excluding exact matches
             const similarSearchBody = {
                 index: 'products',
                 body: {
                     from: 0,
-                    size: 100,  // Get a larger number of potential similar products
+                    size: 100, 
                     query: {
                         bool: {
                             must: [
@@ -348,9 +345,8 @@ app.get('/products/search', async (req, res) => {
                     id: hit._id,
                     ...hit._source,
                 }))
-                .filter(similar => !exactProductIds.includes(similar.id));  // Filter out exact products
+                .filter(similar => !exactProductIds.includes(similar.id)); 
 
-            // Limit the number of similar products to 12
             similarProducts = similarProducts.slice(0, 12);
         }
 
@@ -364,21 +360,6 @@ app.get('/products/search', async (req, res) => {
         res.status(500).send('Server error');
     }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

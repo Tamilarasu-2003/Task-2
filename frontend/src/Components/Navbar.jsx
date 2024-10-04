@@ -10,11 +10,11 @@ const Navbar1 = () => {
 
     const categories = [
         'Electronics',
-        'Home Appliances',
+        'Home_Appliances',
         'Clothing',
         'Books',
         'Toys',
-        'Sports Equipment',
+        'Sports_Equipments',
     ];
 
     const handleLogout = () => {
