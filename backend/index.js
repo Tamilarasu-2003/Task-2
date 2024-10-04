@@ -207,11 +207,7 @@ app.get('/products', async (req, res) => {
 
 
 app.get('/products/search', async (req, res) => {
-    const { query, page = 1, limit = 12 } = req.query;
-    const offset = (page - 1) * limit;
-
-    console.log("page",page);
-    console.log("offset",offset)
+    const { query } = req.query;
 
     if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -236,28 +232,43 @@ app.get('/products/search', async (req, res) => {
     }
 
     try {
-        // Prepare the must conditions for the query
+        const cleanedQuery = query.replace(priceRangeRegex, '').trim();
+
+        // Prepare must conditions for exact matches
         const mustConditions = [
             {
-                multi_match: {
-                    query: query.replace(priceRangeRegex, '').trim(),
-                    fields: ['name', 'category', 'specs.brand'],
-                    operator: 'and'
+                bool: {
+                    should: [
+                        {
+                            match: {
+                                name: {
+                                    query: cleanedQuery,
+                                    boost: 2
+                                }
+                            }
+                        },
+                        {
+                            multi_match: {
+                                query: cleanedQuery,
+                                fields: ['category', 'specs.brand'],
+                                operator: 'or'
+                            }
+                        }
+                    ]
                 }
             }
         ];
 
-        // Add price filter if it exists
         if (priceFilter) {
             mustConditions.push(priceFilter);
         }
 
-        // Create the search body for the main search
-        const searchBody = {
+        // Search for exact matches
+        const exactSearchBody = {
             index: 'products',
             body: {
                 from: 0,
-                size: 1000,
+                size: 100,
                 query: {
                     bool: {
                         must: mustConditions
@@ -266,18 +277,19 @@ app.get('/products/search', async (req, res) => {
             }
         };
 
-        const searchResults = await elasticClient.search(searchBody);
-        const products = searchResults.hits.hits.map(hit => ({
+        const exactResults = await elasticClient.search(exactSearchBody);
+        const exactProducts = exactResults.hits.hits.map(hit => ({
             id: hit._id,
             ...hit._source,
         }));
 
-        // If no products found, perform search without price filter
-        if (products.length === 0 && priceFilter) {
+        let alternateProducts = [];  // Initialize alternateProducts
+
+        if (exactProducts.length === 0 && priceFilter) {
             const mustConditionsWithoutPrice = [
                 {
                     multi_match: {
-                        query: query.replace(priceRangeRegex, '').trim(),
+                        query: cleanedQuery,
                         fields: ['name', 'category', 'specs.brand'],
                         operator: 'and'
                     }
@@ -298,55 +310,53 @@ app.get('/products/search', async (req, res) => {
             };
 
             const fallbackSearchResults = await elasticClient.search(fallbackSearchBody);
-            products.push(...fallbackSearchResults.hits.hits.map(hit => ({
+            alternateProducts = fallbackSearchResults.hits.hits.map(hit => ({
                 id: hit._id,
                 ...hit._source,
-            })));
+            }));
         }
 
-        // Determine the category from the results
-        const category = products.length > 0 ? products[0].category : null;
-        let additionalProducts = [];
+        // Determine the category from the exact results or the alternate products
+        const category = exactProducts.length > 0 ? exactProducts[0].category : (alternateProducts.length > 0 ? alternateProducts[0].category : null);
+        let similarProducts = [];
 
         if (category) {
-            const categorySearchBody = {
+            // Collect IDs of exact products to exclude them from similar products
+            const exactProductIds = exactProducts.map(product => product.id);
+
+            // Find similar products in the same category, excluding exact matches
+            const similarSearchBody = {
                 index: 'products',
                 body: {
                     from: 0,
-                    size: 1000,
+                    size: 100,  // Get a larger number of potential similar products
                     query: {
                         bool: {
                             must: [
                                 { term: { category: category } },
                                 ...(priceFilter ? [priceFilter] : [])
                             ],
-                            must_not: [
-                                { match: { name: query.replace(priceRangeRegex, '').trim() } }
-                            ]
+                            
                         }
                     }
                 }
             };
 
-            const categorySearchResults = await elasticClient.search(categorySearchBody);
-            additionalProducts = categorySearchResults.hits.hits.map(hit => ({
-                id: hit._id,
-                ...hit._source,
-            }));
+            const similarResults = await elasticClient.search(similarSearchBody);
+            similarProducts = similarResults.hits.hits
+                .map(hit => ({
+                    id: hit._id,
+                    ...hit._source,
+                }))
+                .filter(similar => !exactProductIds.includes(similar.id));  // Filter out exact products
+
+            // Limit the number of similar products to 12
+            similarProducts = similarProducts.slice(0, 12);
         }
 
-        // Combine results and remove duplicates
-        const combinedProducts = [...products, ...additionalProducts];
-        const uniqueProducts = Array.from(new Set(combinedProducts.map(p => p.id)))
-            .map(id => combinedProducts.find(p => p.id === id));
-
-        // Implement pagination on the combined results
-        const paginatedProducts = uniqueProducts.slice(offset, page*limit);
-        const totalCount = uniqueProducts.length;
-
         res.json({
-            products: paginatedProducts,
-            totalCount,
+            exactProducts,
+            similarProducts,
         });
 
     } catch (error) {
@@ -354,6 +364,14 @@ app.get('/products/search', async (req, res) => {
         res.status(500).send('Server error');
     }
 });
+
+
+
+
+
+
+
+
 
 
 
