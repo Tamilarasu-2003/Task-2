@@ -31,21 +31,36 @@ const syncData = async () => {
 
         // Index data into Elasticsearch
         for (const row of res.rows) {
+            let specs;
+
+            // Check if specs is already an object or a JSON string
+            if (typeof row.specs === 'string') {
+                specs = JSON.parse(row.specs.replace(/""/g, '"')); // Parse JSON string if it's a string
+            } else if (typeof row.specs === 'object') {
+                specs = row.specs; // If it's already an object, use it directly
+            } else {
+                throw new Error(`Unexpected specs format: ${typeof row.specs}`);
+            }
+
             await elasticClient.index({
                 index: 'products',
-                id: row.id.toString(), 
+                id: row.id.toString(),
                 body: {
                     name: row.name,
                     category: row.category,
-                    price: row.price,
-                    offer_price: row.offer_price,
-                    specs: row.specs,
+                    price: parseFloat(row.price), // Ensure price is a float
+                    offer_price: parseFloat(row.offer_price), // Ensure offer_price is a float
+                    specs: {
+                        brand: specs.brand, // Extract brand
+                        model: specs.model, // Extract model
+                        features: specs.features // Ensure features is an array
+                    },
                 },
             });
         }
         console.log("Data indexed into Elasticsearch");
     } catch (err) {
-        console.error(err);
+        console.error("Error during syncing data:", err);
     } finally {
         await pgClient.end();
         console.log("PostgreSQL connection closed");
@@ -53,6 +68,8 @@ const syncData = async () => {
 };
 
 syncData();
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -187,120 +204,111 @@ app.get('/products', async (req, res) => {
 });
 
 //  products/search
+
+
 app.get('/products/search', async (req, res) => {
     const { query, page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
-
 
     if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
     }
 
-    try {
-        
-        console.log('Search query:', query);
+    // Initialize price filter
+    let priceFilter = null;
+    const priceRangeRegex = /(?:under|above|between)\s+(\d+)(?:\s+and\s+(\d+))?/i;
+    const priceMatch = query.match(priceRangeRegex);
 
-        const body = await elasticClient.search({
+    // Extract price filter if present
+    if (priceMatch) {
+        const lowerBound = parseFloat(priceMatch[1]);
+        if (priceMatch[0].includes('under')) {
+            priceFilter = { range: { price: { lte: lowerBound } } };
+        } else if (priceMatch[0].includes('above')) {
+            priceFilter = { range: { price: { gte: lowerBound } } };
+        } else if (priceMatch[0].includes('between') && priceMatch[2]) {
+            const upperBound = parseFloat(priceMatch[2]);
+            priceFilter = { range: { price: { gte: lowerBound, lte: upperBound } } };
+        }
+    }
+
+    try {
+        // Prepare the must conditions for the query
+        const mustConditions = [
+            {
+                multi_match: {
+                    query: query.replace(priceRangeRegex, '').trim(), // Remove price filter from the query
+                    fields: ['name', 'category' ,'specs.brand'], // Search in both name and category
+                    operator: 'and'
+                }
+            }
+        ];
+
+        // Add price filter if it exists
+        if (priceFilter) {
+            mustConditions.push(priceFilter);
+        }
+
+        // Create the search body
+        const searchBody = {
             index: 'products',
             body: {
                 from: offset,
                 size: limit,
                 query: {
                     bool: {
-                        should: [
-                            {
-                                match: {
-                                    'name': {
-                                        query: query,
-                                        boost: 5,
-                                        fuzziness: 'AUTO'
-
-                                    }
-                                }
-                            },
-                            {
-                                bool: {
-                                    must_not: {
-                                        match: {
-                                            'name': query 
-                                        }
-                                    },
-                                    should: [
-                                        {
-                                            match: {
-                                                'specs.brand': {
-                                                    query: query,
-                                                    boost: 4, 
-                                                    fuzziness: 'AUTO'
-                                                }
-                                            }
-                                        },
-                                        {
-                                            match: {
-                                                'specs.model': {
-                                                    query: query,
-                                                    boost: 3,
-                                                    fuzziness: 'AUTO'
-                                                }
-                                            }
-                                        },
-                                        {
-                                            multi_match: {
-                                                query: query,
-                                                fields: [
-                                                    'specs.features',
-                                                ],
-                                                boost: 2, 
-                                                fuzziness: 'AUTO'
-                                            }
-                                        },
-                                        {
-                                            match: {
-                                                'category': {
-                                                    query: query,
-                                                    boost: 1, 
-                                                    fuzziness: 'AUTO'
-                                                }
-                                            }
-                                        },
-                                        {
-                                            query_string: {
-                                                query: `*${query}*`,
-                                                fields: [
-                                                    'name',
-                                                    'category',
-                                                    'specs.brand',
-                                                    'specs.model',
-                                                    'specs.features',
-                                                ],
-                                                boost: 0.5 
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
-                        ],
-                        minimum_should_match: 1 
+                        must: mustConditions
                     }
                 }
             }
-        });
-        
-        console.log("ofset:",offset)
-        console.log("limit:",limit)
+        };
 
-        console.log( body.hits);
-
-        const products = body.hits ? body.hits.hits.map(hit => ({
+        const searchResults = await elasticClient.search(searchBody);
+        const products = searchResults.hits.hits.map(hit => ({
             id: hit._id,
             ...hit._source,
-        })) : [];
-        console.log("totalCount",body.hits.total.value),
+        }));
+
+        // Determine the category from the results
+        const category = products.length > 0 ? products[0].category : null;
+        let additionalProducts = [];
+
+        if (category) {
+            // Search for products in the same category
+            const categorySearchBody = {
+                index: 'products',
+                body: {
+                    from: 0,
+                    size: limit,
+                    query: {
+                        bool: {
+                            must: [
+                                { term: { category: category } },
+                                ...(priceFilter ? [priceFilter] : []) // Apply the same price filter if it exists
+                            ],
+                            must_not: [
+                                { match: { name: query.replace(priceRangeRegex, '').trim() } } // Exclude exact name matches
+                            ]
+                        }
+                    }
+                }
+            };
+
+            const categorySearchResults = await elasticClient.search(categorySearchBody);
+            additionalProducts = categorySearchResults.hits.hits.map(hit => ({
+                id: hit._id,
+                ...hit._source,
+            }));
+        }
+
+        // Combine results and remove duplicates
+        const combinedProducts = [...products, ...additionalProducts];
+        const uniqueProducts = Array.from(new Set(combinedProducts.map(p => p.id)))
+            .map(id => combinedProducts.find(p => p.id === id));
 
         res.json({
-            products,
-            totalCount: body.hits ? body.hits.total.value:0,
-            
+            products: uniqueProducts,
+            totalCount: uniqueProducts.length,
         });
 
     } catch (error) {
@@ -309,7 +317,10 @@ app.get('/products/search', async (req, res) => {
     }
 });
 
-  
+
+
+
+
 
 
 
