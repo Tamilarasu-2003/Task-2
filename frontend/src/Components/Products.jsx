@@ -17,8 +17,13 @@ const Products = () => {
     const [isSearching, setIsSearching] = useState(false);
 
     const fetchProducts = async (page, category) => {
+        const sessionToken = localStorage.getItem('sessionToken'); // Get token for auth
         try {
-            const response = await axios.get(`http://localhost:5000/products?page=${page}&limit=${productsPerPage}&category=${category}`);
+            const response = await axios.get(`http://localhost:5000/api/products?page=${page}&limit=${productsPerPage}&category=${category}`, {
+                headers: {
+                    'Authorization': `Bearer ${sessionToken}`
+                }
+            });
             setProducts(response.data.products);
             setTotalCount(response.data.totalCount);
         } catch (error) {
@@ -27,10 +32,14 @@ const Products = () => {
     };
 
     const fetchSearchResults = async (search) => {
+        const sessionToken = localStorage.getItem('sessionToken'); // Get token for auth
         try {
-            const response = await axios.get(`http://localhost:5000/products/search?query=${search}`);
+            const response = await axios.get(`http://localhost:5000/api/products/search?query=${search}`, {
+                headers: {
+                    'Authorization': `Bearer ${sessionToken}`
+                }
+            });
             setExactProducts(response.data.exactProducts);
-            setSimilarProducts(response.data.similarProducts);
             setIsSearching(true);
         } catch (error) {
             console.error('Error fetching search results:', error);
@@ -66,71 +75,22 @@ const Products = () => {
                             {exactProducts.length > 0 ? (
                                 exactProducts.map((product) => (
                                     <div className="bg-white rounded-lg shadow-lg overflow-hidden transition-transform transform hover:scale-105" key={product.id}>
-                                        <img 
-                                            src={product.image || image1}
-                                            alt={product.name}
-                                            className="w-full h-48 object-cover transition-transform duration-200 hover:scale-110" 
-                                        />
+                                        <img src={product.image || image1} alt={product.name} className="w-full h-48 object-cover transition-transform duration-200 hover:scale-110" />
                                         <div className="p-4 flex flex-col">
                                             <h3 className="text-lg font-semibold text-gray-800 text-center">{product.name}</h3>
                                             <div className="flex-grow text-center text-gray-600 mt-2">
                                                 <p><strong>Category:</strong> {product.category}</p>
                                                 <p><strong>Price:</strong> <span className="text-lg font-bold text-green-600">${product.price}</span></p>
-                                                {product.offer_price && (
-                                                    <p className="text-red-500 line-through">${product.offer_price}</p>
-                                                )}
+                                                {product.offer_price && <p className="text-red-500 line-through">${product.offer_price}</p>}
                                                 <p><strong>Brand:</strong> {product.specs.brand}</p>
                                                 <p><strong>Model:</strong> {product.specs.model}</p>
                                                 <p><strong>Features:</strong> {product.specs.features.join(', ')}</p>
                                             </div>
-                                            <a 
-                                                href={`/category/${product.category}`}
-                                                className="mt-4 bg-blue-600 text-white rounded-md py-2 text-center hover:bg-blue-700 transition duration-200"
-                                            >
-                                                Buy Now
-                                            </a>
+                                            <a href={`/category/${product.category}`} className="mt-4 bg-blue-600 text-white rounded-md py-2 text-center hover:bg-blue-700 transition duration-200">Buy Now</a>
                                         </div>
                                     </div>
                                 ))
-                            ) : (
-                                <p>No exact matches found.</p>
-                            )}
-                        </div>
-
-                        <h2 className="text-center text-2xl font-bold mt-10 mb-6">Similar Products</h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 gap-6">
-                            {similarProducts.length > 0 ? (
-                                similarProducts.map((product) => (
-                                    <div className="bg-white rounded-lg shadow-lg overflow-hidden transition-transform transform hover:scale-105" key={product.id}>
-                                        <img 
-                                            src={product.image || image1}
-                                            alt={product.name}
-                                            className="w-full h-48 object-cover transition-transform duration-200 hover:scale-110" 
-                                        />
-                                        <div className="p-4 flex flex-col">
-                                            <h3 className="text-lg font-semibold text-gray-800 text-center">{product.name}</h3>
-                                            <div className="flex-grow text-center text-gray-600 mt-2">
-                                                <p><strong>Category:</strong> {product.category}</p>
-                                                <p><strong>Price:</strong> <span className="text-lg font-bold text-green-600">${product.price}</span></p>
-                                                {product.offer_price && (
-                                                    <p className="text-red-500 line-through">${product.offer_price}</p>
-                                                )}
-                                                <p><strong>Brand:</strong> {product.specs.brand}</p>
-                                                <p><strong>Model:</strong> {product.specs.model}</p>
-                                                <p><strong>Features:</strong> {product.specs.features.join(', ')}</p>
-                                            </div>
-                                            <a 
-                                                href={`/category/${product.category}`}
-                                                className="mt-4 bg-blue-600 text-white rounded-md py-2 text-center hover:bg-blue-700 transition duration-200"
-                                            >
-                                                Buy Now
-                                            </a>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p>No similar products found.</p>
-                            )}
+                            ) : <p>No exact matches found.</p>}
                         </div>
                     </>
                 ) : (
@@ -139,29 +99,18 @@ const Products = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 gap-6">
                             {products.map((product) => (
                                 <div className="bg-white rounded-lg shadow-lg overflow-hidden transition-transform transform hover:scale-105" key={product.id}>
-                                    <img 
-                                        src={product.image || image1}
-                                        alt={product.name}
-                                        className="w-full h-48 object-cover transition-transform duration-200 hover:scale-110" 
-                                    />
+                                    <img src={product.image || image1} alt={product.name} className="w-full h-48 object-cover transition-transform duration-200 hover:scale-110" />
                                     <div className="p-4 flex flex-col">
                                         <h3 className="text-lg font-semibold text-gray-800 text-center">{product.name}</h3>
                                         <div className="flex-grow text-center text-gray-600 mt-2">
                                             <p><strong>Category:</strong> {product.category}</p>
                                             <p><strong>Price:</strong> <span className="text-lg font-bold text-green-600">${product.price}</span></p>
-                                            {product.offer_price && (
-                                                <p className="text-red-500 line-through">${product.offer_price}</p>
-                                            )}
+                                            {product.offer_price && <p className="text-red-500 line-through">${product.offer_price}</p>}
                                             <p><strong>Brand:</strong> {product.specs.brand}</p>
                                             <p><strong>Model:</strong> {product.specs.model}</p>
                                             <p><strong>Features:</strong> {product.specs.features.join(', ')}</p>
                                         </div>
-                                        <a 
-                                            href={`/category/${product.category}`}
-                                            className="mt-4 bg-blue-600 text-white rounded-md py-2 text-center hover:bg-blue-700 transition duration-200"
-                                        >
-                                            Buy Now
-                                        </a>
+                                        <a href={`/category/${product.category}`} className="mt-4 bg-blue-600 text-white rounded-md py-2 text-center hover:bg-blue-700 transition duration-200">Buy Now</a>
                                     </div>
                                 </div>
                             ))}

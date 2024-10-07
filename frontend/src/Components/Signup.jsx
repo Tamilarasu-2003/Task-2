@@ -15,16 +15,30 @@ const Signup = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validate password match
         if (password !== confirmPassword) {
             setErrorMessage("Passwords do not match.");
             return;
         }
+
         try {
-            await axios.post('http://localhost:5000/signup', { username, email, password });
-            alert('Signup successful');
-            navigate('/login');
+            // Change the endpoint to match your backend route for signup
+            const response = await axios.post('http://localhost:5000/api/auth/signup', {
+                username,
+                email,
+                password
+            });
+
+            // Check for successful signup
+            if (response.status === 201) {
+                alert('Signup successful');
+                navigate('/login');
+            }
         } catch (error) {
-            alert('Signup failed');
+            // Handle error message from the backend if available
+            const message = error.response?.data?.message || 'Signup failed';
+            setErrorMessage(message);
         }
     };
 
@@ -32,7 +46,7 @@ const Signup = () => {
         <div className="bg-gray-50 font-[sans-serif]">
             <div className="min-h-screen flex flex-col items-center justify-center py-6 px-4">
                 <div className="max-w-md w-full">
-                    <img src={logo} alt="logo" className="w-60  mx-auto block" />
+                    <img src={logo} alt="logo" className="w-60 mx-auto block" />
                     <div className="p-8 rounded-2xl bg-white shadow">
                         <h2 className="text-gray-800 text-center text-2xl font-bold">Create your account</h2>
                         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>

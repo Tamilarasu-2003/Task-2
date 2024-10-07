@@ -12,17 +12,22 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post('http://localhost:5000/signin', { email, password });
-            const token = response.data.token;
-            const expirationTime = Date.now() + (60 * 60 * 1000);
+            // Update the endpoint to match your MVC backend
+            const response = await axios.post('http://localhost:5000/api/auth/signin', { email, password });
 
+            const token = response.data.token;
+            const expirationTime = Date.now() + (60 * 60 * 1000); // 1 hour expiration
+
+            // Store token and user info in local storage
             localStorage.setItem('sessionToken', token);
             localStorage.setItem('username', response.data.username);
             localStorage.setItem('tokenExpiration', expirationTime);
 
-            navigate('/dashboard'); 
+            navigate('/dashboard'); // Redirect to the dashboard
         } catch (error) {
-            alert('Signin failed');
+            // Display error message from backend if available
+            const message = error.response?.data?.message || 'Signin failed';
+            alert(message);
         }
     };
 

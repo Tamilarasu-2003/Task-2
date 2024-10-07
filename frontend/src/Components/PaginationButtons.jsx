@@ -6,15 +6,9 @@ const PaginationButtons = ({ onPageChange, currentPage, totalCount, productsPerP
     const pageCount = Math.ceil(totalCount / productsPerPage);
 
     const paginationVariants = {
-        hidden: {
-            opacity: 0,
-            y: 200,
-        },
-        visible: {
-            opacity: 1,
-            y: 0,
-        },
-        Transition: {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0 },
+        transition: {
             type: "spring",
             stiffness: 260,
             damping: 20,
@@ -42,6 +36,7 @@ const PaginationButtons = ({ onPageChange, currentPage, totalCount, productsPerP
                 containerClassName='flex items-center justify-center mt-8 mb-4'
                 pageClassName='block border border-solid border-lightGrey hover:bg-gray-300 w-10 h-10 flex items-center justify-center rounded-md mr-4'
                 activeClassName='bg-indigo-600 text-white'
+                disabledClassName='opacity-50 cursor-not-allowed'
                 renderOnZeroPageCount={null}
             />
         </motion.div>

@@ -10,63 +10,56 @@ const Navbar1 = () => {
 
     const categories = [
         'Electronics',
-        'Home_Appliances',
+        'Home Appliances',
         'Clothing',
         'Books',
         'Toys',
-        'Sports_Equipments',
+        'Sports Equipments',
     ];
 
     const handleLogout = () => {
+        // Clear session data
         localStorage.removeItem('sessionToken');
         localStorage.removeItem('tokenExpiration');
         localStorage.removeItem('username');
-        navigate('/login');
+        navigate('/login'); // Redirect to login page
     };
 
     const handleSearch = (e) => {
         e.preventDefault();
-        
+        // Navigate to the products page with the search term
         navigate(`/products?search=${searchTerm}`);
     };
-    
 
     const handleCategoryChange = (e) => {
         const categoryName = e.target.value;
-        setSelectedCategory(e.target.value);
-        const lowerCaseCategoryName = categoryName.toLowerCase(); 
-        console.log(categoryName);
-        navigate(`/products?category=${lowerCaseCategoryName}`);
-
-
-        
+        setSelectedCategory(categoryName);
+        // Navigate to the products page with the selected category
+        navigate(`/products?category=${categoryName.toLowerCase()}`);
     };
 
     return (
         <nav className="bg-white shadow-md p-4">
             <div className="container mx-auto flex justify-between items-center">
-
-                {location.pathname === '/products' ?(
+                {location.pathname === '/products' ? (
                     <div className="flex items-center space-x-4">
-                    <select
-                        value={selectedCategory}
-                        onChange={handleCategoryChange}
-                        className="border border-gray-300 rounded-md p-2 ml-8 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="" disabled>Select a category</option>
-                        {categories.map((category) => (
-                            <option key={category} value={category.toLowerCase()}>
-                                {category}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                ):(
+                        <select
+                            value={selectedCategory}
+                            onChange={handleCategoryChange}
+                            className="border border-gray-300 rounded-md p-2 ml-8 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="" disabled>Select a category</option>
+                            {categories.map((category) => (
+                                <option key={category} value={category.toLowerCase()}>
+                                    {category}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                ) : (
                     <span className="text-xl font-semibold text-gray-900">Hello, {username}!</span>
                 )}
 
-
-                
-                
                 <div className="flex items-center space-x-4">
                     {location.pathname === '/products' ? (
                         <form onSubmit={handleSearch} className="flex items-center space-x-2">
@@ -87,8 +80,9 @@ const Navbar1 = () => {
                         </form>
                     ) : (
                         <button 
-                            className="bg-indigo-600 text-white rounded-md py-2 px-4 hover:bg-indigo-700 transition duration-200">
-                                <Link to="/products">Products</Link>
+                            className="bg-indigo-600 text-white rounded-md py-2 px-4 hover:bg-indigo-700 transition duration-200"
+                        >
+                            <Link to="/products">Products</Link>
                         </button>
                     )}
                     <button 
@@ -100,7 +94,6 @@ const Navbar1 = () => {
                 </div>
             </div>
         </nav>
-
     );
 };
 
