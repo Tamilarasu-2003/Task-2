@@ -37,6 +37,7 @@ const Signup = () => {
             }
         } catch (error) {
             // Handle error message from the backend if available
+            console.error("error",error)
             const message = error.response?.data?.message || 'Signup failed';
             setErrorMessage(message);
         }
